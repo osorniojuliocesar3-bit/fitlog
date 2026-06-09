@@ -357,6 +357,37 @@ select option { background:#0d1327; }
 .dot { width:8px; height:8px; border-radius:50%; }
 .dot.online { background:var(--success); box-shadow:0 0 8px rgba(45,184,122,.6); }
 .dot.offline { background:var(--muted); }
+
+/* ── CALENDAR ── */
+.cal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+.cal-header h3 { font-family:'Bebas Neue',sans-serif; font-size:1.5rem; letter-spacing:.08em; color:var(--white); text-transform:uppercase; }
+.cal-nav { background:rgba(58,123,213,.12); border:1px solid var(--border); color:var(--white); width:2.2rem; height:2.2rem; border-radius:50%; cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; transition:all .2s; }
+.cal-nav:hover { background:rgba(58,123,213,.35); border-color:var(--glow); color:var(--glow); }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+.cal-day-name { font-size:.63rem; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); text-align:center; padding:4px 0 10px; font-weight:700; }
+.cal-day { aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:.6rem; font-size:.82rem; font-weight:600; color:rgba(232,234,246,.35); position:relative; transition:all .2s; user-select:none; }
+.cal-day.empty { pointer-events:none; }
+.cal-day.other-month { color:rgba(232,234,246,.18); }
+.cal-day.today { border:1px solid rgba(91,158,247,.5); color:var(--white); background:rgba(91,158,247,.05); }
+.cal-day.has-workout { color:var(--white); cursor:pointer; border:1px solid rgba(58,123,213,.35); background:rgba(58,123,213,.18); }
+.cal-day.has-workout:hover { background:rgba(58,123,213,.38); border-color:var(--glow); transform:scale(1.1); box-shadow:0 4px 20px rgba(58,123,213,.35); z-index:1; }
+.cal-day.has-workout.selected { background:linear-gradient(135deg,rgba(58,123,213,.55),rgba(91,158,247,.35)); border-color:var(--glow); box-shadow:0 0 22px rgba(91,158,247,.45); color:#fff; transform:scale(1.1); z-index:1; }
+.cal-day .cal-dot { position:absolute; bottom:5px; left:50%; transform:translateX(-50%); display:flex; gap:2px; }
+.cal-dot span { width:4px; height:4px; border-radius:50%; display:block; }
+.type-dot-gym { background:#5b9ef7; }
+.type-dot-animalflow { background:#a78bfa; }
+.type-dot-cardio { background:#68d391; }
+.type-dot-mixed { background:#fbbf24; }
+
+/* ── CALENDAR DETAIL PANEL ── */
+.cal-detail-panel { margin-top:20px; border-top:1px solid var(--border); padding-top:20px; animation:calFadeIn .3s ease; }
+@keyframes calFadeIn { from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)} }
+.cal-detail-title { font-family:'Bebas Neue',sans-serif; font-size:1.25rem; letter-spacing:.07em; color:var(--glow); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+.cal-detail-title span { font-size:.72rem; font-family:'Montserrat',sans-serif; letter-spacing:.15em; text-transform:uppercase; background:rgba(58,123,213,.2); border:1px solid rgba(58,123,213,.4); color:var(--glow); padding:2px 10px; border-radius:50px; }
+.cal-workout-block { background:rgba(10,14,26,.65); border:1px solid var(--border); border-radius:1rem; padding:18px; }
+.cal-workout-block + .cal-workout-block { margin-top:12px; }
+.cal-workout-block-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; border-bottom:1px solid var(--border); padding-bottom:12px; }
+.cal-workout-title { font-family:'Bebas Neue',sans-serif; font-size:1.2rem; letter-spacing:.05em; }
 </style>
 </head>
 <body>
@@ -435,6 +466,15 @@ select option { background:#0d1327; }
 
 <!-- PROGRESO -->
 <section id="tab-progreso">
+  <div class="card" id="calendarCard">
+    <div class="cal-header">
+      <button class="cal-nav" id="calPrev">&#8249;</button>
+      <h3 id="calTitle"></h3>
+      <button class="cal-nav" id="calNext">&#8250;</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div id="calDetail" style="display:none"></div>
+  </div>
   <div class="card">
     <p class="card-title">Sesiones por semana</p>
     <div class="chart-container"><canvas id="weeklyChart"></canvas></div>
@@ -913,7 +953,139 @@ const chartDefaults={
     y:{ticks:{color:'rgba(232,234,246,.45)',font:{family:'Montserrat',size:11}},grid:{color:'rgba(58,123,213,.1)'},beginAtZero:true}
   }
 };
-function renderProgress(){renderWeeklyChart();renderExerciseSelect();renderPRs();}
+function renderProgress(){renderCalendar();renderWeeklyChart();renderExerciseSelect();renderPRs();}
+
+// ── CALENDAR ──────────────────────────────────────────
+const CAL_MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+let calYear,calMonth,calSelectedDate=null;
+
+function initCalendar(){
+  const now=new Date();
+  calYear=now.getFullYear();
+  calMonth=now.getMonth();
+  document.getElementById('calPrev').onclick=()=>{
+    if(--calMonth<0){calMonth=11;calYear--;}
+    calSelectedDate=null;
+    renderCalendar();
+  };
+  document.getElementById('calNext').onclick=()=>{
+    if(++calMonth>11){calMonth=0;calYear++;}
+    calSelectedDate=null;
+    renderCalendar();
+  };
+}
+
+function renderCalendar(){
+  if(calYear===undefined){const n=new Date();calYear=n.getFullYear();calMonth=n.getMonth();}
+  document.getElementById('calTitle').textContent=CAL_MONTHS[calMonth]+' '+calYear;
+
+  // Build day -> workouts map for visible month
+  const prefix=calYear+'-'+String(calMonth+1).padStart(2,'0');
+  const dayMap={};
+  window._data.workouts.forEach(w=>{
+    if(w.date.startsWith(prefix)){
+      const d=parseInt(w.date.split('-')[2]);
+      if(!dayMap[d])dayMap[d]=[];
+      dayMap[d].push(w);
+    }
+  });
+
+  const firstDow=new Date(calYear,calMonth,1).getDay();
+  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  const todayStr=new Date().toISOString().split('T')[0];
+  const dayNames=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+  let html=dayNames.map(n=>`<div class="cal-day-name">${n}</div>`).join('');
+
+  // Leading empty cells
+  for(let i=0;i<firstDow;i++) html+=`<div class="cal-day empty"></div>`;
+
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const ws=dayMap[d];
+    const isToday=dateStr===todayStr;
+    const hasW=ws&&ws.length>0;
+    const isSelected=dateStr===calSelectedDate;
+
+    // Build type dots (up to 3 unique types)
+    let dotsHTML='';
+    if(hasW){
+      const seen=new Set();
+      ws.forEach(w=>{if(seen.size<3)seen.add(w.type);});
+      dotsHTML=`<span class="cal-dot">${[...seen].map(t=>`<span class="type-dot-${t}"></span>`).join('')}</span>`;
+    }
+
+    const cls=['cal-day',isToday?'today':'',hasW?'has-workout':'',isSelected?'selected':''].filter(Boolean).join(' ');
+    const onclick=hasW?`onclick="showCalDay('${dateStr}',this)"`:'';
+    html+=`<div class="${cls}" ${onclick} data-date="${dateStr}">${d}${dotsHTML}</div>`;
+  }
+
+  document.getElementById('calGrid').innerHTML=html;
+
+  // Re-render detail if a date was selected
+  if(calSelectedDate){
+    const el=document.querySelector(`.cal-day[data-date="${calSelectedDate}"]`);
+    if(el&&el.classList.contains('has-workout')) renderCalDetail(calSelectedDate);
+    else hideCalDetail();
+  } else {
+    hideCalDetail();
+  }
+}
+
+function showCalDay(dateStr,el){
+  if(calSelectedDate===dateStr){
+    // Toggle off
+    el.classList.remove('selected');
+    calSelectedDate=null;
+    hideCalDetail();
+    return;
+  }
+  document.querySelectorAll('.cal-day.selected').forEach(d=>d.classList.remove('selected'));
+  el.classList.add('selected');
+  calSelectedDate=dateStr;
+  renderCalDetail(dateStr);
+}
+
+function hideCalDetail(){
+  const panel=document.getElementById('calDetail');
+  panel.style.display='none';
+  panel.innerHTML='';
+}
+
+function renderCalDetail(dateStr){
+  const ws=window._data.workouts.filter(w=>w.date===dateStr);
+  if(!ws.length){hideCalDetail();return;}
+  const panel=document.getElementById('calDetail');
+  panel.style.display='block';
+
+  const blocksHTML=ws.map(w=>{
+    const exHTML=(w.exercises||[]).map(ex=>`
+      <div class="detail-exercise">
+        <h4>${ex.name}</h4>
+        ${ex.sets.length?`<table class="sets-table">
+          <tr><th>#</th><th>Reps</th><th>Peso</th><th>Notas</th></tr>
+          ${ex.sets.map((s,i)=>`<tr><td>${i+1}</td><td>${s.reps||'–'}</td><td>${s.weight?s.weight+' kg':'–'}</td><td style="color:var(--muted)">${s.notes||'–'}</td></tr>`).join('')}
+        </table>`:''}
+      </div>`).join('');
+    return `<div class="cal-workout-block">
+      <div class="cal-workout-block-header">
+        <div class="cal-workout-title">${w.name||typeLabel(w.type)}</div>
+        <span class="tag ${w.type}">${typeLabel(w.type)}</span>
+        <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="openWorkoutDetail('${w.id}')">Ver detalle</button>
+      </div>
+      ${exHTML||'<p style="color:var(--muted);font-size:.82rem">Sin ejercicios registrados.</p>'}
+      ${w.notes?`<div style="margin-top:12px;padding:10px 14px;background:rgba(5,8,20,.5);border:1px solid var(--border);border-radius:.7rem;font-size:.8rem;color:var(--muted);font-style:italic">"${w.notes}"</div>`:''}
+    </div>`;
+  }).join('');
+
+  panel.innerHTML=`<div class="cal-detail-panel">
+    <div class="cal-detail-title">
+      ${formatDate(dateStr)}
+      <span>${ws.length} rutina${ws.length!==1?'s':''}</span>
+    </div>
+    ${blocksHTML}
+  </div>`;
+}
 function renderWeeklyChart(){
   const weeks={};
   window._data.workouts.forEach(w=>{const k=getWeekKey(new Date(w.date+'T00:00:00'));weeks[k]=(weeks[k]||0)+1;});
@@ -1063,6 +1235,7 @@ function renderStorageStats(){
 // ── INIT ──────────────────────────────────────────────
 loadData();
 renderDashboard();
+initCalendar();
 </script>
 </body>
 </html>
