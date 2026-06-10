@@ -167,6 +167,11 @@ header > * { position: relative; z-index: 1; }
 }
 #unitToggle button.active { background: var(--accent); color: #000; }
 
+/* ── PER-EXERCISE UNIT TOGGLE ── */
+.ex-unit-toggle { display:flex;gap:2px;background:rgba(57,255,20,.06);border:1px solid var(--border);border-radius:50px;padding:2px;margin-left:8px; }
+.ex-unit-toggle button { font-family:'Montserrat',sans-serif;font-size:.58rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:50px;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .2s; }
+.ex-unit-toggle button.active { background:var(--accent);color:#000; }
+
 #authSection { display: none; align-items: center; gap: 10px; margin-left: auto; }
 #authInfo { font-size: .75rem; color: var(--muted); max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #authBtn {
@@ -647,10 +652,11 @@ function setUnit(u) {
 
 function wLabel() { return weightUnit === 'lbs' ? 'lbs' : 'kg'; }
 
-function displayWeight(kgVal) {
+function displayWeight(kgVal, unit) {
   if (kgVal === undefined || kgVal === null || kgVal === '') return '–';
   if (!kgVal && kgVal !== 0) return '–';
-  if (weightUnit === 'lbs') return (kgVal * 2.20462).toFixed(1) + ' lbs';
+  const u = unit || weightUnit;
+  if (u === 'lbs') return parseFloat((kgVal * 2.20462).toFixed(1)) + ' lbs';
   return kgVal + ' kg';
 }
 
@@ -744,12 +750,15 @@ function collectExercises() {
     const nameEl = document.getElementById('exName_' + idx);
     const name = nameEl?.value?.trim();
     if (!name) return;
+    const exUnit = block.dataset.unit || weightUnit;
     const sets = [];
     block.querySelectorAll('#sets_' + idx + ' .set-row').forEach(row => {
       const inp = row.querySelectorAll('input');
-      sets.push({ reps: parseFloat(inp[0].value) || 0, weight: storeWeight(inp[1].value), notes: inp[2].value });
+      const rawW = parseFloat(inp[1].value) || 0;
+      const weightKg = exUnit === 'lbs' ? parseFloat((rawW / 2.20462).toFixed(4)) : rawW;
+      sets.push({ reps: parseFloat(inp[0].value) || 0, weight: weightKg, notes: inp[2].value });
     });
-    exercises.push({ name, sets });
+    exercises.push({ name, unit: exUnit, sets });
   });
   return exercises;
 }
@@ -956,18 +965,24 @@ function openWorkoutModal(id = null) {
 
 function addExercise(ex = null) {
   const idx = exCount++;
+  const unit = ex?.unit || weightUnit;
   const div = document.createElement('div');
   div.className = 'exercise-block';
   div.id = 'exBlock_' + idx;
+  div.dataset.unit = unit;
   div.innerHTML = `
     <h4>
       <input type="text" id="exName_${idx}" placeholder="Nombre del ejercicio / movimiento"
         value="${ex ? ex.name.replace(/"/g, '&quot;') : ''}"
         style="background:transparent;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:2px 0;font-size:.9rem;font-weight:700;color:var(--white);flex:1;font-family:'Montserrat',sans-serif">
+      <div class="ex-unit-toggle">
+        <button class="${unit === 'kg' ? 'active' : ''}" onclick="setExUnit(${idx},'kg',this)">KG</button>
+        <button class="${unit === 'lbs' ? 'active' : ''}" onclick="setExUnit(${idx},'lbs',this)">LBS</button>
+      </div>
       <button class="btn btn-danger btn-sm" style="margin-left:8px" onclick="document.getElementById('exBlock_${idx}').remove();scheduleAutoSave('workout')">✕</button>
     </h4>
     <div class="set-row" style="margin-bottom:4px">
-      <span>#</span><span>Reps</span><span>Peso (${wLabel()})</span><span>Notas</span><span></span>
+      <span>#</span><span>Reps</span><span id="weightLabel_${idx}">Peso (${unit})</span><span>Notas</span><span></span>
     </div>
     <div id="sets_${idx}"></div>
     <button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="addSet(${idx})">+ Serie</button>`;
@@ -978,8 +993,12 @@ function addExercise(ex = null) {
 function addSet(exIdx, s = {}) {
   const c = document.getElementById('sets_' + exIdx);
   if (!c) return;
+  const exUnit = document.getElementById('exBlock_' + exIdx)?.dataset.unit || weightUnit;
   const n = c.children.length + 1;
-  const displayW = toDisplayVal(s.weight);
+  let displayW = '';
+  if (s.weight) {
+    displayW = exUnit === 'lbs' ? parseFloat((s.weight * 2.20462).toFixed(2)) : s.weight;
+  }
   const div = document.createElement('div');
   div.className = 'set-row';
   div.innerHTML = `<span>${n}</span>
@@ -988,6 +1007,25 @@ function addSet(exIdx, s = {}) {
     <input type="text" placeholder="nota..." value="${s.notes || ''}">
     <button class="btn btn-danger btn-sm" onclick="this.parentElement.remove();renumberSets(${exIdx});scheduleAutoSave('workout')">✕</button>`;
   c.appendChild(div);
+}
+
+function setExUnit(exIdx, unit, btn) {
+  const block = document.getElementById('exBlock_' + exIdx);
+  const oldUnit = block.dataset.unit;
+  if (oldUnit === unit) return;
+  block.dataset.unit = unit;
+  block.querySelectorAll('.ex-unit-toggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const lbl = document.getElementById('weightLabel_' + exIdx);
+  if (lbl) lbl.textContent = 'Peso (' + unit + ')';
+  block.querySelectorAll('#sets_' + exIdx + ' .set-row').forEach(row => {
+    const inp = row.querySelectorAll('input')[1];
+    const val = parseFloat(inp.value);
+    if (val && !isNaN(val)) {
+      inp.value = unit === 'lbs' ? parseFloat((val * 2.20462).toFixed(2)) : parseFloat((val / 2.20462).toFixed(4));
+    }
+  });
+  scheduleAutoSave('workout');
 }
 
 function renumberSets(i) {
@@ -1035,14 +1073,17 @@ function renderRutinas() {
 function openWorkoutDetail(id) {
   const w = window._data.workouts.find(x => x.id === id);
   if (!w) return;
-  const exHTML = (w.exercises || []).map(ex => `
+  const exHTML = (w.exercises || []).map(ex => {
+    const exUnit = ex.unit || weightUnit;
+    return `
     <div class="detail-exercise">
       <h4>${ex.name}</h4>
       ${ex.sets.length ? `<table class="sets-table">
-        <tr><th>#</th><th>Reps</th><th>Peso (${wLabel()})</th><th>Notas</th></tr>
-        ${ex.sets.map((s,i) => `<tr><td>${i+1}</td><td>${s.reps || '–'}</td><td>${s.weight ? displayWeight(s.weight) : '–'}</td><td style="color:var(--muted)">${s.notes || '–'}</td></tr>`).join('')}
+        <tr><th>#</th><th>Reps</th><th>Peso (${exUnit})</th><th>Notas</th></tr>
+        ${ex.sets.map((s,i) => `<tr><td>${i+1}</td><td>${s.reps || '–'}</td><td>${s.weight ? displayWeight(s.weight, exUnit) : '–'}</td><td style="color:var(--muted)">${s.notes || '–'}</td></tr>`).join('')}
       </table>` : ''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
   document.getElementById('workoutDetailContent').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:18px">
       <div>
@@ -1225,14 +1266,17 @@ function renderCalDetail(dateStr) {
   const panel = document.getElementById('calDetail');
   panel.style.display = 'block';
   const blocksHTML = ws.map(w => {
-    const exHTML = (w.exercises || []).map(ex => `
+    const exHTML = (w.exercises || []).map(ex => {
+      const exUnit = ex.unit || weightUnit;
+      return `
       <div class="detail-exercise">
         <h4>${ex.name}</h4>
         ${ex.sets.length ? `<table class="sets-table">
-          <tr><th>#</th><th>Reps</th><th>Peso (${wLabel()})</th><th>Notas</th></tr>
-          ${ex.sets.map((s,i) => `<tr><td>${i+1}</td><td>${s.reps || '–'}</td><td>${s.weight ? displayWeight(s.weight) : '–'}</td><td style="color:var(--muted)">${s.notes || '–'}</td></tr>`).join('')}
+          <tr><th>#</th><th>Reps</th><th>Peso (${exUnit})</th><th>Notas</th></tr>
+          ${ex.sets.map((s,i) => `<tr><td>${i+1}</td><td>${s.reps || '–'}</td><td>${s.weight ? displayWeight(s.weight, exUnit) : '–'}</td><td style="color:var(--muted)">${s.notes || '–'}</td></tr>`).join('')}
         </table>` : ''}
-      </div>`).join('');
+      </div>`;
+    }).join('');
     return `<div class="cal-workout-block">
       <div class="cal-workout-block-header">
         <div class="cal-workout-title">${w.name || typeLabel(w.type)}</div>
