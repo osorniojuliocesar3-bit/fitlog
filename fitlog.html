@@ -9,7 +9,8 @@
 
 <script type="module">
   import { initializeApp }        from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword,
+           createUserWithEmailAndPassword, signOut, onAuthStateChanged }
                                   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getFirestore, doc, setDoc, getDoc, onSnapshot }
                                   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -34,6 +35,7 @@
 
     onAuthStateChanged(auth, async user => {
       if (user) {
+        showLoginScreen(false);
         window._fbUser = user;
         updateAuthUI(user);
         const snap = await getDoc(doc(db, "users", user.uid));
@@ -50,11 +52,41 @@
           }
         });
       } else {
+        showLoginScreen(true);
         window._fbUser = null;
         updateAuthUI(null);
         if (unsubscribe) unsubscribe();
       }
     });
+  }
+
+  function showLoginScreen(show) {
+    const s = document.getElementById('loginScreen');
+    if (s) s.classList.toggle('visible', show);
+  }
+
+  function getFirebaseError(code) {
+    const msgs = {
+      'auth/user-not-found':          'No existe una cuenta con ese email.',
+      'auth/wrong-password':          'Contraseña incorrecta. Inténtalo de nuevo.',
+      'auth/invalid-credential':      'Email o contraseña incorrectos.',
+      'auth/email-already-in-use':    'Ya existe una cuenta con ese email.',
+      'auth/weak-password':           'La contraseña debe tener al menos 6 caracteres.',
+      'auth/invalid-email':           'El formato del email no es válido.',
+      'auth/too-many-requests':       'Demasiados intentos. Espera un momento e inténtalo de nuevo.',
+      'auth/network-request-failed':  'Error de conexión. Verifica tu internet.',
+      'auth/popup-closed-by-user':    'Inicio de sesión cancelado.',
+      'auth/cancelled-popup-request': '',
+    };
+    return msgs[code] || 'Error al iniciar sesión. Inténtalo de nuevo.';
+  }
+
+  function showAuthError(msg) {
+    if (!msg) return;
+    const el = document.getElementById('loginError');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('show');
   }
 
   function updateAuthUI(user) {
@@ -67,11 +99,47 @@
       info.textContent = user.displayName || user.email;
       info.style.display = 'inline';
     } else {
-      btn.textContent = '🔑 Iniciar sesión con Google';
-      btn.onclick = () => signInWithPopup(auth, new GoogleAuthProvider());
+      btn.textContent = 'Iniciar sesión';
+      btn.onclick = () => showLoginScreen(true);
       info.style.display = 'none';
     }
   }
+
+  window.switchLoginTab = function(tab) {
+    document.getElementById('tabSignIn').classList.toggle('active', tab === 'signin');
+    document.getElementById('tabRegister').classList.toggle('active', tab === 'register');
+    document.getElementById('loginConfirmPass').style.display = tab === 'register' ? 'block' : 'none';
+    document.getElementById('loginSubmitBtn').textContent = tab === 'register' ? 'Crear cuenta' : 'Iniciar sesión';
+    document.getElementById('loginError').classList.remove('show');
+    document.getElementById('loginPassword').setAttribute('autocomplete', tab === 'register' ? 'new-password' : 'current-password');
+  };
+
+  window.authEmailAction = async function() {
+    const isRegister = document.getElementById('tabRegister').classList.contains('active');
+    const email    = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const errorEl  = document.getElementById('loginError');
+    errorEl.classList.remove('show');
+
+    if (!email || !password) { showAuthError('Por favor completa todos los campos.'); return; }
+
+    if (isRegister) {
+      const confirm = document.getElementById('loginPasswordConfirm').value;
+      if (password !== confirm) { showAuthError('Las contraseñas no coinciden.'); return; }
+      if (password.length < 6) { showAuthError('La contraseña debe tener al menos 6 caracteres.'); return; }
+      try { await createUserWithEmailAndPassword(auth, email, password); }
+      catch(e) { showAuthError(getFirebaseError(e.code)); }
+    } else {
+      try { await signInWithEmailAndPassword(auth, email, password); }
+      catch(e) { showAuthError(getFirebaseError(e.code)); }
+    }
+  };
+
+  window.authGoogle = async function() {
+    document.getElementById('loginError').classList.remove('show');
+    try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+    catch(e) { showAuthError(getFirebaseError(e.code)); }
+  };
 
   window._saveCloud = async (data) => {
     if (!CONFIGURED || !window._fbUser) return;
@@ -89,6 +157,7 @@
     } else {
       const authSection = document.getElementById('authSection');
       if (authSection) authSection.style.display = 'flex';
+      showLoginScreen(true);
     }
   });
 </script>
@@ -397,6 +466,73 @@ select option { background: #0f0f0f; }
 .cal-detail-panel { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px; animation: calFadeIn .3s ease; }
 @keyframes calFadeIn { from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)} }
 .cal-detail-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.25rem; letter-spacing: .08em; text-transform: uppercase; color: var(--glow); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+/* ── LOGIN SCREEN ── */
+#loginScreen {
+  display: none; position: fixed; inset: 0; z-index: 1000;
+  background: var(--navy); flex-direction: column;
+  align-items: center; justify-content: center; padding: 20px;
+}
+#loginScreen.visible { display: flex; }
+#loginScreen::before {
+  content: ''; position: absolute; inset: 0;
+  background-image: linear-gradient(rgba(57,255,20,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(57,255,20,.05) 1px,transparent 1px);
+  background-size: 50px 50px; animation: gridMove 20s linear infinite; pointer-events: none;
+}
+.login-card {
+  position: relative; z-index: 1;
+  background: linear-gradient(145deg, #111, #0a0a0a);
+  border: 1px solid rgba(57,255,20,.3); border-radius: 1.6rem;
+  width: 100%; max-width: 400px; padding: 2.4rem 2rem;
+  box-shadow: 0 30px 80px rgba(0,0,0,.8), 0 0 60px rgba(57,255,20,.08);
+  animation: cardIn .4s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes cardIn { from{opacity:0;transform:translateY(24px) scale(.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+.login-card::before {
+  content: ''; position: absolute; top: 0; left: 10%; right: 10%; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent); border-radius: 99px;
+}
+.login-logo {
+  font-family: 'Bebas Neue', sans-serif; font-size: 2.2rem; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--accent);
+  filter: drop-shadow(0 0 14px rgba(57,255,20,.7));
+  text-align: center; margin-bottom: .3rem;
+}
+.login-subtitle {
+  text-align: center; font-size: .72rem; color: var(--muted);
+  letter-spacing: .15em; text-transform: uppercase; margin-bottom: 1.8rem;
+}
+.login-tabs {
+  display: flex; background: rgba(57,255,20,.06);
+  border: 1px solid var(--border); border-radius: 50px; padding: 4px; margin-bottom: 1.4rem;
+}
+.login-tab {
+  flex: 1; text-align: center; padding: 8px 0; border-radius: 50px;
+  cursor: pointer; border: none; background: transparent; color: var(--muted);
+  font-family: 'Montserrat', sans-serif; font-size: .76rem; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; transition: all .2s;
+}
+.login-tab.active { background: var(--accent); color: #000; }
+#loginError {
+  display: none; background: rgba(255,68,68,.1); border: 1px solid rgba(255,68,68,.35);
+  border-radius: .7rem; padding: 9px 13px; font-size: .8rem;
+  color: #ff8080; margin-bottom: 14px; line-height: 1.5;
+}
+#loginError.show { display: block; }
+#loginConfirmPass { display: none; }
+.login-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; }
+.login-divider::before, .login-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.login-divider span { font-size: .68rem; color: var(--muted); letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; }
+.btn-google {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 10px 18px; border-radius: 50px;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.15);
+  color: var(--white); cursor: pointer;
+  font-family: 'Montserrat', sans-serif; font-size: .8rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; transition: all .2s;
+}
+.btn-google:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.3); transform: translateY(-1px); }
+.btn-full { width: 100%; justify-content: center; padding: 11px 18px; }
 .cal-detail-title span { font-size: .72rem; font-family: 'Montserrat', sans-serif; letter-spacing: .15em; text-transform: uppercase; background: rgba(57,255,20,.1); border: 1px solid rgba(57,255,20,.3); color: var(--glow); padding: 2px 10px; border-radius: 50px; }
 .cal-workout-block { background: rgba(10,10,10,.7); border: 1px solid var(--border); border-radius: 1rem; padding: 18px; }
 .cal-workout-block + .cal-workout-block { margin-top: 12px; }
@@ -405,6 +541,45 @@ select option { background: #0f0f0f; }
 </style>
 </head>
 <body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <p class="login-logo">⚡ Animal Move</p>
+    <p class="login-subtitle">Tu diario de entrenamiento</p>
+    <div class="login-tabs">
+      <button class="login-tab active" id="tabSignIn" onclick="switchLoginTab('signin')">Iniciar sesión</button>
+      <button class="login-tab" id="tabRegister" onclick="switchLoginTab('register')">Registrarse</button>
+    </div>
+    <div id="loginError"></div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="tu@email.com" autocomplete="email"
+             onkeydown="if(event.key==='Enter')authEmailAction()">
+    </div>
+    <div class="form-group">
+      <label>Contraseña</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password"
+             onkeydown="if(event.key==='Enter')authEmailAction()">
+    </div>
+    <div class="form-group" id="loginConfirmPass">
+      <label>Confirmar contraseña</label>
+      <input type="password" id="loginPasswordConfirm" placeholder="••••••••" autocomplete="new-password"
+             onkeydown="if(event.key==='Enter')authEmailAction()">
+    </div>
+    <button class="btn btn-primary btn-full" id="loginSubmitBtn" onclick="authEmailAction()">Iniciar sesión</button>
+    <div class="login-divider"><span>o continúa con</span></div>
+    <button class="btn-google" onclick="authGoogle()">
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+        <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908C16.658 14.013 17.64 11.706 17.64 9.2z"/>
+        <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+        <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+        <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/>
+      </svg>
+      Continuar con Google
+    </button>
+  </div>
+</div>
 
 <div id="setupBanner">
   <p>⚠️ <strong>Modo local:</strong> Los datos se guardan solo en este dispositivo. Para sincronización en la nube,
