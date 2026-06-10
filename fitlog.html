@@ -215,8 +215,11 @@ header::after {
 header > * { position: relative; z-index: 1; }
 
 .logo {
-  font-family: 'Bebas Neue', sans-serif; font-size: 1.9rem; letter-spacing: .12em; text-transform: uppercase;
-  color: var(--accent); filter: drop-shadow(0 0 14px rgba(57,255,20,.7));
+  display: flex; align-items: center;
+  filter: drop-shadow(0 0 14px rgba(57,255,20,.7));
+}
+.logo img {
+  height: 44px; width: auto; display: block;
 }
 
 #streakDisplay {
@@ -589,7 +592,7 @@ select option { background: #0f0f0f; }
 </div>
 
 <header>
-  <span class="logo">⚡ Animal Move</span>
+  <span class="logo"><img src="logo.png" alt="Animal Move"></span>
   <span id="streakDisplay"></span>
   <div id="unitToggle">
     <button id="btnKg" class="active" onclick="setUnit('kg')">KG</button>
