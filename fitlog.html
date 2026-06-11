@@ -338,7 +338,7 @@ select option { background: #0f0f0f; }
 /* ── GRIDS ── */
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
-@media(max-width:600px){ .grid-2{grid-template-columns:1fr} .grid-3{grid-template-columns:1fr 1fr} }
+@media(max-width:600px){ .grid-2{grid-template-columns:1fr} }
 
 /* ── STAT CARDS ── */
 .stat-card {
@@ -556,6 +556,169 @@ select option { background: #0f0f0f; }
 .cal-workout-block + .cal-workout-block { margin-top: 12px; }
 .cal-workout-block-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .cal-workout-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; letter-spacing: .06em; text-transform: uppercase; }
+
+/* ═══════════════════════════════════════════════
+   MOBILE BOTTOM NAV
+   ═══════════════════════════════════════════════ */
+#mobileNav {
+  display: none;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 99;
+  background: rgba(8,8,8,.98); backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+#mobileNav button {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px; padding: 7px 2px;
+  background: none; border: none; cursor: pointer;
+  font-family: 'Montserrat', sans-serif; color: var(--muted);
+  transition: color .2s; min-height: 54px; min-width: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+#mobileNav button.active { color: var(--accent); }
+#mobileNav button.active .mobile-nav-icon { filter: drop-shadow(0 0 5px rgba(57,255,20,.8)); }
+.mobile-nav-icon { font-size: 1.15rem; line-height: 1.2; display: block; }
+.mobile-nav-label { font-size: .5rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; display: block; line-height: 1; }
+
+/* ═══════════════════════════════════════════════
+   MOBILE RESPONSIVE — max-width: 640px
+   ═══════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* Show mobile nav, hide desktop top nav */
+  nav:not(#mobileNav) { display: none; }
+  #mobileNav { display: flex; }
+
+  /* ── Header compact ── */
+  header { height: 50px; padding: 0 10px; gap: 6px; flex-wrap: nowrap; }
+  .logo img { height: 28px; }
+  #streakDisplay { font-size: .56rem; padding: .16rem .55rem; letter-spacing: .06em; }
+  #unitToggle { padding: 2px; gap: 1px; }
+  #unitToggle button { padding: 3px 7px; }
+  #authSection { gap: 5px; }
+  #authInfo { display: none !important; }
+  #syncStatus { display: none; }
+  #authBtn { font-size: .58rem; padding: 5px 9px; letter-spacing: .04em; white-space: nowrap; }
+  #setupBanner { padding: 7px 10px; gap: 7px; }
+  #setupBanner p { font-size: .68rem; }
+
+  /* ── Main — extra bottom padding for mobile nav ── */
+  main { padding: 14px 10px 80px; }
+
+  /* ── Cards ── */
+  .card { padding: 14px 12px; border-radius: .9rem; margin-bottom: 12px; }
+  .card-title { font-size: 1.1rem; margin-bottom: 12px; }
+
+  /* ── Stat cards ── */
+  .stat-card { padding: 12px 8px; border-radius: 1rem; }
+  .stat-val { font-size: 1.85rem; }
+  .stat-lbl { font-size: .58rem; letter-spacing: .12em; margin-top: 3px; }
+
+  /* ── Buttons — larger touch targets (min 44px) ── */
+  .btn { min-height: 44px; padding: 10px 16px; }
+  .btn-sm { min-height: 38px; padding: 7px 12px; font-size: .7rem; }
+
+  /* ── Section header ── */
+  .section-header { margin-bottom: 14px; gap: 8px; }
+  .section-header h2 { font-size: 1.5rem; }
+
+  /* ── Search row — stack vertically ── */
+  .search-row { flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .search-row input, .search-row select { min-width: 0; width: 100%; }
+
+  /* ── Filter pills — horizontal scroll ── */
+  .filter-pills { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 8px; gap: 6px; margin-bottom: 14px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .filter-pills::-webkit-scrollbar { display: none; }
+  .pill { white-space: nowrap; flex-shrink: 0; min-height: 36px; padding: 6px 14px; display: inline-flex; align-items: center; }
+
+  /* ── Workout items ── */
+  .workout-item { padding: 13px 12px; }
+  .wi-title { font-size: 1.1rem; }
+
+  /* ── Exercise builder ── */
+  .exercise-block { padding: 12px 10px; }
+  .exercise-block h4 { flex-wrap: wrap; row-gap: 6px; margin-bottom: 10px; align-items: center; }
+  .exercise-block h4 > input { flex: 1 1 100% !important; order: -1; min-width: 0; }
+  .exercise-block h4 > .ex-unit-toggle { margin-left: 0; }
+
+  /* Set row — 4 columns (hide notes column on mobile) */
+  .set-row { grid-template-columns: 20px 1fr 1fr auto; gap: 5px; }
+  .set-row > *:nth-child(4) { display: none; }
+  .set-row input { padding: 7px 6px; }
+
+  /* ── Detail tables — horizontal scroll ── */
+  .detail-exercise { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .sets-table { min-width: 240px; }
+  .sets-table td, .sets-table th { padding: 5px 6px; font-size: .74rem; }
+
+  /* ── Modals — bottom sheet ── */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal {
+    max-width: 100%; width: 100%; max-height: 93vh;
+    border-radius: 1.4rem 1.4rem 0 0;
+    padding: 1.8rem 1rem 1.4rem;
+    transform: translateY(60px); opacity: 0;
+  }
+  .modal-overlay.open .modal { transform: translateY(0); opacity: 1; }
+  /* Drag handle indicator */
+  .modal::after {
+    content: ''; display: block; position: absolute;
+    top: 10px; left: 50%; transform: translateX(-50%);
+    width: 38px; height: 4px; border-radius: 4px;
+    background: rgba(255,255,255,.18);
+  }
+  .modal::before { left: 35%; right: 35%; }
+  .modal-title { font-size: 1.45rem; margin-bottom: 1rem; }
+  .modal-close { top: .9rem; right: .9rem; }
+  .modal-actions { gap: 8px; flex-wrap: wrap; }
+  .modal-actions .btn { flex: 1; justify-content: center; min-width: 0; }
+
+  /* ── Calendar ── */
+  .cal-grid { gap: 3px; }
+  .cal-header { margin-bottom: 12px; }
+  .cal-header h3 { font-size: 1.2rem; }
+  .cal-nav { width: 2rem; height: 2rem; font-size: .95rem; }
+  .cal-day-name { font-size: .53rem; padding: 2px 0 7px; letter-spacing: .05em; }
+  .cal-day { font-size: .76rem; border-radius: .45rem; }
+  .cal-day .cal-dot { bottom: 3px; }
+  .cal-dot span { width: 3px; height: 3px; }
+  .cal-detail-panel { padding-top: 14px; margin-top: 14px; }
+  .cal-workout-block { padding: 12px; }
+  .cal-workout-block-header { gap: 7px; margin-bottom: 10px; padding-bottom: 10px; }
+  .cal-workout-title { font-size: 1.05rem; }
+
+  /* ── Charts ── */
+  .chart-container { height: 190px; }
+
+  /* ── PR rows ── */
+  .pr-weight { font-size: 1.3rem; }
+  .pr-name { font-size: .82rem; }
+
+  /* ── Movement cards ── */
+  .movement-card { padding: 14px 12px; }
+
+  /* ── Cloud / Export boxes ── */
+  .cloud-card { padding: 16px 12px; }
+  .export-box { padding: 14px 12px; }
+
+  /* ── Empty state ── */
+  .empty { padding: 32px 16px; }
+  .empty .icon { font-size: 2.4rem; }
+
+  /* ── Toast & autosave — above bottom nav ── */
+  .toast { bottom: 68px; right: 10px; left: 10px; text-align: center; }
+  .autosave-ind { bottom: 68px; left: 10px; }
+
+  /* ── Login card ── */
+  .login-card { padding: 1.8rem 1.2rem; border-radius: 1.2rem; }
+  .login-logo { font-size: 1.9rem; }
+
+  /* ── Prevent iOS auto-zoom (inputs need ≥16px) ── */
+  input[type="text"], input[type="email"], input[type="password"],
+  input[type="number"], input[type="url"], input[type="date"],
+  input[type="search"], input:not([type]), select, textarea {
+    font-size: 16px !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -621,12 +784,12 @@ select option { background: #0f0f0f; }
 </header>
 
 <nav>
-  <button class="active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
-  <button onclick="showTab('rutinas',this)">📋 Rutinas</button>
-  <button onclick="showTab('animalflow',this)">🐾 Animal Move</button>
-  <button onclick="showTab('progreso',this)">📈 Progreso</button>
-  <button onclick="showTab('videos',this)">🎥 Videos</button>
-  <button onclick="showTab('exportar',this)">💾 Exportar</button>
+  <button data-tab="dashboard" class="active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
+  <button data-tab="rutinas" onclick="showTab('rutinas',this)">📋 Rutinas</button>
+  <button data-tab="animalflow" onclick="showTab('animalflow',this)">🐾 Animal Move</button>
+  <button data-tab="progreso" onclick="showTab('progreso',this)">📈 Progreso</button>
+  <button data-tab="videos" onclick="showTab('videos',this)">🎥 Videos</button>
+  <button data-tab="exportar" onclick="showTab('exportar',this)">💾 Exportar</button>
 </nav>
 
 <main>
@@ -746,6 +909,34 @@ select option { background: #0f0f0f; }
   </div>
 </section>
 </main>
+
+<!-- MOBILE BOTTOM NAV -->
+<nav id="mobileNav">
+  <button data-tab="dashboard" class="active" onclick="showTab('dashboard',this)">
+    <span class="mobile-nav-icon">📊</span>
+    <span class="mobile-nav-label">Dashboard</span>
+  </button>
+  <button data-tab="rutinas" onclick="showTab('rutinas',this)">
+    <span class="mobile-nav-icon">📋</span>
+    <span class="mobile-nav-label">Rutinas</span>
+  </button>
+  <button data-tab="animalflow" onclick="showTab('animalflow',this)">
+    <span class="mobile-nav-icon">🐾</span>
+    <span class="mobile-nav-label">Movimientos</span>
+  </button>
+  <button data-tab="progreso" onclick="showTab('progreso',this)">
+    <span class="mobile-nav-icon">📈</span>
+    <span class="mobile-nav-label">Progreso</span>
+  </button>
+  <button data-tab="videos" onclick="showTab('videos',this)">
+    <span class="mobile-nav-icon">🎥</span>
+    <span class="mobile-nav-label">Videos</span>
+  </button>
+  <button data-tab="exportar" onclick="showTab('exportar',this)">
+    <span class="mobile-nav-icon">💾</span>
+    <span class="mobile-nav-label">Datos</span>
+  </button>
+</nav>
 
 <!-- MODALS -->
 <div class="modal-overlay" id="workoutModal">
@@ -1036,9 +1227,9 @@ function showToast(msg) {
 // ── TABS ──────────────────────────────────────────────
 function showTab(name, btn) {
   document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('[data-tab]').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  btn.classList.add('active');
+  document.querySelectorAll(`[data-tab="${name}"]`).forEach(b => b.classList.add('active'));
   if (name === 'dashboard') renderDashboard();
   if (name === 'rutinas') renderRutinas();
   if (name === 'animalflow') renderMovements();
