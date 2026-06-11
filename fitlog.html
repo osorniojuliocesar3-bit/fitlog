@@ -554,6 +554,29 @@ select option { background: #0f0f0f; }
 .cal-detail-title span { font-size: .72rem; font-family: 'Montserrat', sans-serif; letter-spacing: .15em; text-transform: uppercase; background: rgba(57,255,20,.1); border: 1px solid rgba(57,255,20,.3); color: var(--glow); padding: 2px 10px; border-radius: 50px; }
 .cal-workout-block { background: rgba(10,10,10,.7); border: 1px solid var(--border); border-radius: 1rem; padding: 18px; }
 .cal-workout-block + .cal-workout-block { margin-top: 12px; }
+
+/* ── DRAG & DROP ── */
+.drag-handle {
+  cursor: grab; color: var(--muted); touch-action: none;
+  user-select: none; flex-shrink: 0; font-size: 1.25rem; opacity: .5;
+  transition: opacity .2s, color .2s; display: flex; align-items: center;
+  justify-content: center; padding: 2px 5px; border-radius: 4px;
+}
+.drag-handle:hover { opacity: 1; color: var(--accent); background: rgba(57,255,20,.08); }
+.drag-handle:active { cursor: grabbing; }
+.workout-item.sortable-item { padding-left: 36px; position: relative; }
+.workout-item.sortable-item .drag-handle {
+  position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+  font-size: 1.3rem; width: 22px; height: 30px;
+}
+.exercise-block .drag-handle { margin-right: 6px; font-size: 1.1rem; }
+.sortable-dragging { opacity: .25 !important; background: rgba(57,255,20,.04) !important; }
+.drag-drop-before { border-top: 2px solid var(--accent) !important; }
+.drag-drop-after  { border-bottom: 2px solid var(--accent) !important; }
+@media (max-width: 640px) {
+  .workout-item.sortable-item { padding-left: 30px; }
+  .workout-item.sortable-item .drag-handle { left: 5px; }
+}
 .cal-workout-block-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
 .cal-workout-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; letter-spacing: .06em; text-transform: uppercase; }
 
@@ -1215,6 +1238,24 @@ window.addEventListener('DOMContentLoaded', () => {
   // Unit toggle init
   document.getElementById('btnKg').classList.toggle('active', weightUnit === 'kg');
   document.getElementById('btnLbs').classList.toggle('active', weightUnit === 'lbs');
+
+  // ── Drag & drop: rutinas list ──
+  makeSortable(
+    document.getElementById('rutinasList'),
+    '.workout-item',
+    newOrder => {
+      window._data.workoutOrder = newOrder.filter(Boolean);
+      saveData();
+      showToast('Orden guardado ✓');
+    }
+  );
+
+  // ── Drag & drop: ejercicios en el editor ──
+  makeSortable(
+    document.getElementById('exercisesContainer'),
+    '.exercise-block',
+    () => scheduleAutoSave('workout')
+  );
 });
 
 // ── TOAST ─────────────────────────────────────────────
@@ -1312,9 +1353,12 @@ function workoutSummaryHTML(w) {
   </div>${w.notes ? `<p style="margin-top:12px;font-size:.82rem;color:var(--muted);font-style:italic">"${w.notes}"</p>` : ''}`;
 }
 
-function workoutItemHTML(w) {
+function workoutItemHTML(w, draggable = false) {
   const names = (w.exercises || []).slice(0, 3).map(e => e.name).join(' · ');
-  return `<div class="workout-item" onclick="openWorkoutDetail('${w.id}')">
+  const cls = 'workout-item' + (draggable ? ' sortable-item' : '');
+  const handle = draggable ? `<span class="drag-handle" title="Mantener para reordenar" onclick="event.stopPropagation()">⠿</span>` : '';
+  return `<div class="${cls}" data-id="${w.id}" onclick="openWorkoutDetail('${w.id}')">
+    ${handle}
     <div class="wi-date">${formatDate(w.date)}</div>
     <div class="wi-title">${w.name || typeLabel(w.type)}</div>
     ${names ? `<div class="wi-ex">${names}${(w.exercises || []).length > 3 ? ' ...' : ''}</div>` : ''}
@@ -1358,6 +1402,7 @@ function addExercise(ex = null) {
   div.dataset.unit = unit;
   div.innerHTML = `
     <h4>
+      <span class="drag-handle" title="Mantener para reordenar" onclick="event.stopPropagation()">⠿</span>
       <input type="text" id="exName_${idx}" placeholder="Nombre del ejercicio / movimiento"
         value="${ex ? ex.name.replace(/"/g, '&quot;') : ''}"
         style="background:transparent;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:2px 0;font-size:.9rem;font-weight:700;color:var(--white);flex:1;font-family:'Montserrat',sans-serif">
@@ -1433,7 +1478,10 @@ function saveWorkout() {
   };
   const idx = window._data.workouts.findIndex(w => w.id === id);
   if (idx >= 0) window._data.workouts[idx] = workout;
-  else window._data.workouts.push(workout);
+  else {
+    window._data.workouts.push(workout);
+    if (window._data.workoutOrder?.length) window._data.workoutOrder.unshift(id);
+  }
   saveData();
   closeModal('workoutModal');
   renderRutinas();
@@ -1446,14 +1494,25 @@ function saveWorkout() {
 function renderRutinas() {
   const search = (document.getElementById('rutinasSearch')?.value || '').toLowerCase();
   const filter = document.getElementById('rutinasFilter')?.value || '';
-  let ws = [...window._data.workouts].sort((a,b) => b.date.localeCompare(a.date));
+  const draggable = !search && !filter;
+  let ws;
+  if (draggable && window._data.workoutOrder?.length) {
+    const orderMap = new Map(window._data.workoutOrder.map((id, i) => [id, i]));
+    ws = [...window._data.workouts].sort((a, b) => {
+      const ai = orderMap.has(a.id) ? orderMap.get(a.id) : Infinity;
+      const bi = orderMap.has(b.id) ? orderMap.get(b.id) : Infinity;
+      return ai !== bi ? ai - bi : b.date.localeCompare(a.date);
+    });
+  } else {
+    ws = [...window._data.workouts].sort((a,b) => b.date.localeCompare(a.date));
+  }
   if (filter) ws = ws.filter(w => w.type === filter);
   if (search) ws = ws.filter(w =>
     (w.name || '').toLowerCase().includes(search) ||
     (w.exercises || []).some(e => e.name.toLowerCase().includes(search)) ||
     (w.notes || '').toLowerCase().includes(search));
   const c = document.getElementById('rutinasList');
-  c.innerHTML = ws.length ? ws.map(workoutItemHTML).join('') : '<div class="empty"><span class="icon">📋</span><p>No hay rutinas que mostrar.</p></div>';
+  c.innerHTML = ws.length ? ws.map(w => workoutItemHTML(w, draggable)).join('') : '<div class="empty"><span class="icon">📋</span><p>No hay rutinas que mostrar.</p></div>';
 }
 
 function openWorkoutDetail(id) {
@@ -1484,6 +1543,7 @@ function openWorkoutDetail(id) {
   document.getElementById('deleteWorkoutBtn').onclick = () => {
     if (!confirm('¿Eliminar esta rutina?')) return;
     window._data.workouts = window._data.workouts.filter(x => x.id !== id);
+    if (window._data.workoutOrder) window._data.workoutOrder = window._data.workoutOrder.filter(x => x !== id);
     saveData(); closeModal('detailModal'); renderRutinas(); renderDashboard(); showToast('Rutina eliminada');
   };
   document.getElementById('detailModal').classList.add('open');
@@ -1860,6 +1920,92 @@ function renderStorageStats() {
     document.getElementById('cloudStatusLabel').textContent = 'Sincronizado con Firebase ✓';
     document.getElementById('cloudStatusLabel').style.color = 'var(--success)';
   }
+}
+
+// ── DRAG & DROP SORTABLE ─────────────────────────────
+function makeSortable(container, itemSelector, onReorder) {
+  if (!container || container._sortableInit) return;
+  container._sortableInit = true;
+
+  let src = null, ghost = null, offsetY = 0, lastOver = null, didMove = false, startX = 0, startY = 0;
+
+  function items() { return [...container.querySelectorAll(itemSelector)]; }
+
+  function xy(e) { const t = e.touches ? e.touches[0] : e; return [t.clientX, t.clientY]; }
+
+  function buildGhost(el) {
+    const r = el.getBoundingClientRect();
+    const g = el.cloneNode(true);
+    g.className = el.className;
+    g.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;`
+      + `margin:0;pointer-events:none;z-index:9999;`
+      + `box-shadow:0 20px 50px rgba(0,0,0,.8),0 0 0 2px var(--accent);`
+      + `transform:scale(1.025);opacity:.9;border-radius:${getComputedStyle(el).borderRadius};`
+      + `transition:none;`;
+    document.body.appendChild(g);
+    return g;
+  }
+
+  function clearDrop() {
+    if (lastOver) { lastOver.classList.remove('drag-drop-before','drag-drop-after'); lastOver = null; }
+  }
+
+  function onStart(e) {
+    const handle = e.target.closest('.drag-handle');
+    if (!handle) return;
+    const item = handle.closest(itemSelector);
+    if (!item || !container.contains(item)) return;
+    e.preventDefault();
+    const [cx, cy] = xy(e);
+    startX = cx; startY = cy;
+    offsetY = cy - item.getBoundingClientRect().top;
+    src = item; didMove = false;
+    ghost = buildGhost(item);
+    item.classList.add('sortable-dragging');
+    document.addEventListener('mousemove', onMove, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchend', onEnd);
+  }
+
+  function onMove(e) {
+    if (!src) return;
+    e.preventDefault();
+    const [cx, cy] = xy(e);
+    ghost.style.top = (cy - offsetY) + 'px';
+    if (!didMove && (Math.abs(cx - startX) > 3 || Math.abs(cy - startY) > 3)) didMove = true;
+    ghost.style.visibility = 'hidden';
+    const hit = document.elementFromPoint(cx, cy);
+    ghost.style.visibility = '';
+    const over = hit?.closest(itemSelector);
+    clearDrop();
+    if (!over || over === src || !container.contains(over)) return;
+    over.classList.add(cy < over.getBoundingClientRect().top + over.getBoundingClientRect().height / 2
+      ? 'drag-drop-before' : 'drag-drop-after');
+    lastOver = over;
+  }
+
+  function onEnd() {
+    if (!src) return;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('mouseup', onEnd);
+    document.removeEventListener('touchend', onEnd);
+    const el = src; src = null;
+    el.classList.remove('sortable-dragging');
+    if (ghost) { ghost.remove(); ghost = null; }
+    if (didMove && lastOver) {
+      if (lastOver.classList.contains('drag-drop-before')) container.insertBefore(el, lastOver);
+      else container.insertBefore(el, lastOver.nextSibling);
+      el.style.pointerEvents = 'none';
+      setTimeout(() => { el.style.pointerEvents = ''; }, 350);
+      onReorder(items().map(n => n.dataset.id || n.id));
+    }
+    clearDrop(); didMove = false;
+  }
+
+  container.addEventListener('mousedown', onStart);
+  container.addEventListener('touchstart', onStart, { passive: false });
 }
 
 // ── INIT ──────────────────────────────────────────────
