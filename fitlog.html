@@ -35,9 +35,16 @@
 
     onAuthStateChanged(auth, async user => {
       if (user) {
-        showLoginScreen(false);
         window._fbUser = user;
+        window._userStorageKey = 'fitlog_v1_' + user.uid;
+        // Reset memory and load only this user's cached data
+        window._data = { workouts: [], movements: [], videos: [] };
+        const cached = localStorage.getItem(window._userStorageKey);
+        if (cached) { try { window._data = JSON.parse(cached); } catch(e) {} }
+        showLoginScreen(false);
         updateAuthUI(user);
+        window._refreshUI && window._refreshUI();
+        // Sync from Firestore (authoritative source)
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists()) {
           const cloud = snap.data().fitlog;
@@ -45,17 +52,25 @@
         }
         if (unsubscribe) unsubscribe();
         unsubscribe = onSnapshot(doc(db, "users", user.uid), snap => {
+          if (!window._fbUser) return;
           if (snap.exists() && snap.data().fitlog) {
             window._data = snap.data().fitlog;
             window._saveLocal();
             window._refreshUI();
           }
         });
+        window._refreshUI();
       } else {
-        showLoginScreen(true);
+        if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+        // Wipe this user's localStorage cache before clearing session
+        if (window._userStorageKey) localStorage.removeItem(window._userStorageKey);
         window._fbUser = null;
+        window._userStorageKey = null;
+        // Clear all in-memory data so nothing leaks between sessions
+        window._data = { workouts: [], movements: [], videos: [] };
+        window._refreshUI && window._refreshUI();
+        showLoginScreen(true);
         updateAuthUI(null);
-        if (unsubscribe) unsubscribe();
       }
     });
   }
@@ -853,11 +868,13 @@ function toDisplayVal(kgVal) {
 window._data = { workouts: [], movements: [], videos: [] };
 
 window._saveLocal = function() {
-  localStorage.setItem('fitlog_v1', JSON.stringify(window._data));
+  const key = window._userStorageKey || 'fitlog_v1';
+  localStorage.setItem(key, JSON.stringify(window._data));
 };
 
 function loadData() {
-  const s = localStorage.getItem('fitlog_v1');
+  const key = window._userStorageKey || 'fitlog_v1';
+  const s = localStorage.getItem(key);
   if (s) window._data = JSON.parse(s);
 }
 
@@ -1637,7 +1654,7 @@ function importJSON() {
 }
 
 function renderStorageStats() {
-  const sz = new Blob([localStorage.getItem('fitlog_v1') || '']).size;
+  const sz = new Blob([localStorage.getItem(window._userStorageKey || 'fitlog_v1') || '']).size;
   const user = window._fbUser;
   document.getElementById('storageStats').innerHTML = `
     <div style="font-size:.82rem;color:var(--muted);line-height:2.2">
