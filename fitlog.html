@@ -1707,10 +1707,22 @@ function hideCalDetail() {
 }
 
 function renderCalDetail(dateStr) {
-  const ws = window._data.workouts.filter(w => w.date === dateStr);
+  let ws = window._data.workouts.filter(w => w.date === dateStr);
   if (!ws.length) { hideCalDetail(); return; }
   const panel = document.getElementById('calDetail');
   panel.style.display = 'block';
+
+  // Respect global workoutOrder for same-day ordering
+  if (window._data.workoutOrder?.length) {
+    const orderMap = new Map(window._data.workoutOrder.map((id, i) => [id, i]));
+    ws = [...ws].sort((a, b) => {
+      const ai = orderMap.has(a.id) ? orderMap.get(a.id) : Infinity;
+      const bi = orderMap.has(b.id) ? orderMap.get(b.id) : Infinity;
+      return ai - bi;
+    });
+  }
+
+  const multi = ws.length > 1;
   const blocksHTML = ws.map(w => {
     const exHTML = (w.exercises || []).map(ex => {
       const exUnit = ex.unit || weightUnit;
@@ -1723,8 +1735,10 @@ function renderCalDetail(dateStr) {
         </table>` : ''}
       </div>`;
     }).join('');
-    return `<div class="cal-workout-block">
+    const handle = multi ? `<span class="drag-handle" title="Mantener para reordenar" onclick="event.stopPropagation()">⠿</span>` : '';
+    return `<div class="cal-workout-block" data-id="${w.id}">
       <div class="cal-workout-block-header">
+        ${handle}
         <div class="cal-workout-title">${w.name || typeLabel(w.type)}</div>
         <span class="tag ${w.type}">${typeLabel(w.type)}</span>
         <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="openWorkoutDetail('${w.id}')">Ver detalle</button>
@@ -1733,6 +1747,7 @@ function renderCalDetail(dateStr) {
       ${w.notes ? `<div style="margin-top:12px;padding:10px 14px;background:rgba(5,8,20,.5);border:1px solid var(--border);border-radius:.7rem;font-size:.8rem;color:var(--muted);font-style:italic">"${w.notes}"</div>` : ''}
     </div>`;
   }).join('');
+
   panel.innerHTML = `<div class="cal-detail-panel">
     <div class="cal-detail-title">
       ${formatDate(dateStr)}
@@ -1740,6 +1755,30 @@ function renderCalDetail(dateStr) {
     </div>
     ${blocksHTML}
   </div>`;
+
+  if (multi) {
+    makeSortable(
+      panel.querySelector('.cal-detail-panel'),
+      '.cal-workout-block',
+      newOrder => {
+        const daySet = new Set(newOrder);
+        const wo = window._data.workoutOrder?.length
+          ? [...window._data.workoutOrder]
+          : window._data.workouts.map(w => w.id);
+        // Ensure all day IDs exist in wo
+        newOrder.forEach(id => { if (!wo.includes(id)) wo.push(id); });
+        // Collect sorted positions occupied by this day's workouts
+        const positions = [];
+        wo.forEach((id, i) => { if (daySet.has(id)) positions.push(i); });
+        positions.sort((a, b) => a - b);
+        // Place new order into those same positions
+        newOrder.forEach((id, i) => { wo[positions[i]] = id; });
+        window._data.workoutOrder = wo;
+        saveData();
+        showToast('Orden guardado ✓');
+      }
+    );
+  }
 }
 
 function renderWeeklyChart() {
