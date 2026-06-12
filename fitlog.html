@@ -964,8 +964,15 @@ select option { background: #0f0f0f; }
 <!-- MODALS -->
 <div class="modal-overlay" id="workoutModal">
   <div class="modal">
-    <button class="modal-close" onclick="closeModal('workoutModal')">&times;</button>
+    <button class="modal-close" onclick="closeWorkoutModalAccidental()">&times;</button>
     <p class="modal-title" id="workoutModalTitle">Nueva Rutina</p>
+    <div id="workoutDraftBanner" style="display:none;background:rgba(0,255,136,.08);border:1px solid var(--accent);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:.85rem;line-height:1.5">
+      <strong style="color:var(--accent)">Borrador sin guardar</strong> — guardado el <span id="draftSavedAt"></span>. ¿Quieres recuperarlo?
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-primary btn-sm" onclick="recoverWorkoutDraft()">Recuperar borrador</button>
+        <button class="btn btn-secondary btn-sm" onclick="discardWorkoutDraft()">Descartar</button>
+      </div>
+    </div>
     <div class="form-group"><label>Fecha</label><input type="date" id="wDate"></div>
     <div class="form-group">
       <label>Tipo de sesión</label>
@@ -986,8 +993,8 @@ select option { background: #0f0f0f; }
     </div>
     <div class="form-group"><label>Notas de la sesión</label><textarea id="wNotes" placeholder="¿Cómo te sentiste? ¿Algo que mejorar?"></textarea></div>
     <div class="modal-actions">
-      <button class="btn btn-secondary" onclick="closeModal('workoutModal')">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveWorkout()">Guardar</button>
+      <button class="btn btn-secondary" onclick="cancelWorkoutModal()">Cancelar</button>
+      <button class="btn btn-primary" id="saveWorkoutBtn" onclick="saveWorkout()">Guardar</button>
     </div>
   </div>
 </div>
@@ -1196,6 +1203,7 @@ function _autoWorkout() {
     else setSyncStatus('local');
   }, 2000);
   renderDashboard();
+  _saveDraftWorkout();
 }
 
 function _autoMovement() {
@@ -1282,7 +1290,11 @@ function showTab(name, btn) {
 // ── MODALS ────────────────────────────────────────────
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-overlay').forEach(m => {
-  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+  m.addEventListener('click', e => {
+    if (e.target !== m) return;
+    if (m.id === 'workoutModal') { closeWorkoutModalAccidental(); }
+    else m.classList.remove('open');
+  });
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
@@ -1367,13 +1379,85 @@ function workoutItemHTML(w, draggable = false) {
 }
 
 // ── RUTINAS ───────────────────────────────────────────
-let editingWorkoutId = null, exCount = 0;
+let editingWorkoutId = null, exCount = 0, _originalEditingId = null;
+
+// ── Draft recovery (new workouts only) ──────────────────
+const _WORKOUT_DRAFT_KEY = 'fitlog_draft_new_workout';
+
+function _saveDraftWorkout() {
+  if (_originalEditingId) return;
+  try {
+    localStorage.setItem(_WORKOUT_DRAFT_KEY, JSON.stringify({
+      date: document.getElementById('wDate').value,
+      type: document.getElementById('wType').value,
+      name: document.getElementById('wName').value,
+      notes: document.getElementById('wNotes').value,
+      exercises: collectExercises(),
+      savedAt: new Date().toISOString()
+    }));
+  } catch {}
+}
+
+function _clearDraftWorkout() { localStorage.removeItem(_WORKOUT_DRAFT_KEY); }
+
+function _getDraftWorkout() {
+  try { return JSON.parse(localStorage.getItem(_WORKOUT_DRAFT_KEY)); } catch { return null; }
+}
+
+function _hasDraftContent(d) {
+  return d && (d.name || d.notes || (d.exercises && d.exercises.length > 0));
+}
+
+function showDraftRecoveryBanner(draft) {
+  document.getElementById('draftSavedAt').textContent =
+    new Date(draft.savedAt).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+  document.getElementById('workoutDraftBanner').style.display = 'block';
+}
+
+function hideDraftRecoveryBanner() {
+  const el = document.getElementById('workoutDraftBanner');
+  if (el) el.style.display = 'none';
+}
+
+function recoverWorkoutDraft() {
+  const draft = _getDraftWorkout();
+  hideDraftRecoveryBanner();
+  if (!draft) return;
+  document.getElementById('exercisesContainer').innerHTML = '';
+  exCount = 0;
+  document.getElementById('wDate').value = draft.date || new Date().toISOString().split('T')[0];
+  document.getElementById('wType').value = draft.type || 'gym';
+  document.getElementById('wName').value = draft.name || '';
+  document.getElementById('wNotes').value = draft.notes || '';
+  if (draft.exercises && draft.exercises.length > 0) {
+    draft.exercises.forEach(ex => addExercise(ex));
+  } else {
+    addExercise();
+  }
+}
+
+function discardWorkoutDraft() {
+  _clearDraftWorkout();
+  hideDraftRecoveryBanner();
+}
+
+function closeWorkoutModalAccidental() {
+  _saveDraftWorkout();
+  closeModal('workoutModal');
+}
+
+function cancelWorkoutModal() {
+  _clearDraftWorkout();
+  closeModal('workoutModal');
+}
 
 function openWorkoutModal(id = null) {
   editingWorkoutId = id;
+  _originalEditingId = id;
   exCount = 0;
   _draftWorkoutId = null;
   clearTimeout(_autoTimer);
+  hideDraftRecoveryBanner();
   document.getElementById('exercisesContainer').innerHTML = '';
   document.getElementById('workoutModalTitle').textContent = id ? 'Editar Rutina' : 'Nueva Rutina';
   if (id) {
@@ -1389,6 +1473,8 @@ function openWorkoutModal(id = null) {
     document.getElementById('wName').value = '';
     document.getElementById('wNotes').value = '';
     addExercise();
+    const draft = _getDraftWorkout();
+    if (_hasDraftContent(draft)) showDraftRecoveryBanner(draft);
   }
   document.getElementById('workoutModal').classList.add('open');
 }
@@ -1464,8 +1550,18 @@ function renumberSets(i) {
 }
 
 function saveWorkout() {
+  const btn = document.getElementById('saveWorkoutBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
   const date = document.getElementById('wDate').value;
-  if (!date) { showToast('Selecciona una fecha'); return; }
+  if (!date) {
+    showToast('Selecciona una fecha');
+    btn.disabled = false;
+    btn.textContent = 'Guardar';
+    return;
+  }
   const exercises = collectExercises();
   const id = editingWorkoutId || uid();
   const workout = {
@@ -1483,6 +1579,7 @@ function saveWorkout() {
     if (window._data.workoutOrder?.length) window._data.workoutOrder.unshift(id);
   }
   saveData();
+  _clearDraftWorkout();
   closeModal('workoutModal');
   renderRutinas();
   renderDashboard();
